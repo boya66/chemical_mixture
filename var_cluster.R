@@ -12,7 +12,7 @@
 ##         var: a list of variables ordered by the f_sens of the leading var
 ##         sens: a list of all sensitivity indices for variables in each cluster
 ###############################################################################
-var_cluster_thres <- function(data, d, N = 3000, J= 20, seed = 123, 
+var_cluster_exhausted <- function(data, d, N = 3000, J= 20, seed = 123, 
                               alpha = 0.05, saveData = F, ...){
     Y = data[, d+1]
     upper = 30
@@ -24,32 +24,19 @@ var_cluster_thres <- function(data, d, N = 3000, J= 20, seed = 123,
                      covtype = 'Gaussian', maxit = 500)
     }
     
-    # The measurement error is tau square times nugget g from Section 5.2.2 on Book "Surrogate" by Grammacy
-    # All variables have no interaction and the first column is null
-    Y_noInter = rowSums(data[,1:d]) + rnorm(length(Y),0,sd = sqrt(gpi$nu_hat * gpi$g))
-    if(saveData){
-      save('data','Y_noInter',file = paste0("../simulation_data/data",seed,".Rdata"))
-    }
-    upper = 30
-    gpi_perm = mleHomGP(X = as.matrix(data[,1:d]), Z = Y_noInter, lower = rep(1, d), upper = rep(upper, d),
-                        covtype = 'Gaussian', maxit = 500)
-    while(gpi_perm$msg != "CONVERGENCE: REL_REDUCTION_OF_F <= FACTR*EPSMCH"){
-      upper = upper + 1
-      gpi_perm = mleHomGP(X = as.matrix(data[,1:d]), Z = Y_noInter, lower = rep(1, d), upper = rep(upper, d),
-                       covtype = 'Gaussian', maxit = 500)
-    }
+    int_thres = interaction_thres_mc(data[,1:d], sqrt(gpi$nu_hat * gpi$g), N, J,
+                                     d, seed = seed) #85s/4cores
     #upper;gpi_perm
     # image(seq(0,1,len=50), seq(0,1,len=50), matrix(y.pred$mean,ncol = 50))
     # Single variable importance ordering
     # repeat the calculation for J times and take the median as the value
-    system.time({sens = interaction_mc(N, J, d, gpi)})
-    #### -------------------- stopped here -----------------####
+    sens = interaction_mc(N, J, d, gpi, seed = seed) #53s/4cores
     # calculate the scores as the medians
-    f_sens = apply(f_sens.rep, 2, median)
-    t_sens = apply(t_sens.rep, 2, median)
-    sens_diff = apply(sens_diff.rep, 2, median)
+    f_sens = apply(matrix(sens[,1], nrow = d), 1, median)
+    t_sens = apply(matrix(sens[,2], nrow = d), 1, median)
+    sens_diff = apply(matrix(sens[,3], nrow = d), 1, median)
     
-    sens_diff_thres = quantile(sens_diff_perm.rep, 1-alpha)
+    sens_diff_thres = quantile(int_thres, 1-alpha)
   
     # sort the total sensitivity
     sens_idx = 1:d
@@ -67,25 +54,18 @@ var_cluster_thres <- function(data, d, N = 3000, J= 20, seed = 123,
     d_pool = length(idx_interaction) - 1
     while(d_pool > 0){
       comb = cbind(matrix(rep(idx_sel,each = d_pool),ncol = length(idx_sel)), idx_interaction[which(!(idx_interaction %in% idx_sel))]) 
-      comb_f_sens.rep <- comb_t_sens.rep <- comb_diff.rep <- matrix(NA, J, d_pool)
-      for(j in 1:J){
-        set.seed(seed + j)
-        M = lhs::randomLHS(N, d)
-        Mprime = lhs::randomLHS(N, d)
-        comb_f_sens.rep[j,] <- apply(comb,1,function(j) first_order_sens_mult(gpi,d,M,Mprime,j))
-        comb_t_sens.rep[j,] <- apply(comb,1,function(j) total_sens_mult(gpi,d,M,Mprime,j))
-        I = comb_t_sens.rep[j,] - comb_f_sens.rep[j,]
-        comb_diff.rep[j,] <- ifelse(I < 0, 0, I)
+      comb_f_sens <- comb_t_sens <- comb_diff <- rep(NA, d_pool)
+      for(p in 1:d_pool){
+        comb_tmp = interaction_mult_mc(N, J, d, gpi, comb[p,], seed + p)
+        comb_f_sens[p] = median(comb_tmp[,1])
+        comb_t_sens[p] = median(comb_tmp[,2])
+        comb_diff[p] = median(comb_tmp[,3])
       }
-      comb_f_sens = apply(comb_f_sens.rep, 2, median)
-      comb_t_sens = apply(comb_t_sens.rep, 2, median)
-      #boxplot(comb_diff.rep)
-      comb_diff = apply(comb_diff.rep, 2, quantile, 0.5)
       
       sel_new = comb[which.min(comb_diff),ncol(comb)]
-      comb_diff = min(comb_diff)
       comb_f_sens = comb_f_sens[which.min(comb_diff)]
       comb_t_sens = comb_t_sens[which.min(comb_diff)]
+      comb_diff = min(comb_diff)
       if(comb_diff < max(c(sens_diff[sel_new], sel_diff))){
       # if(comb_diff < sel_diff){
         idx_sel = c(idx_sel,sel_new)
@@ -135,7 +115,40 @@ var_cluster_thres <- function(data, d, N = 3000, J= 20, seed = 123,
         }
       }
     }
-    return(list(cluster = clus, cluster.f_sens = clus_f_sens, cluster.t_sens = clus_t_sens,
-                gpi = gpi, settings = data.frame(N =N, J = J, d=d, upper = upper), data = data))
+    
+    # Add the pairwise info
+    pairInfo = vector("list", length=length(clus))
+    for(clus_num in 1: length(clus)){
+      if(length(clus[[clus_num]]) > 1){
+        pair_idx = get_pairIdx(clus[[clus_num]])
+        pair_info = matrix(NA, nrow(pair_idx), 7)
+        pair_info[,1:2] = pair_idx
+        
+        for(i in 1: nrow(pair_idx)){
+          idx = pair_idx[i,]
+          #interaction_mult(N,d,gpi,idx,seed = seed)
+          sens = interaction_mult_mc(N,J,d,gpi,idx,seed = seed)
+          pair_info[i, 3] = median(sens[,1])
+          pair_info[i, 4] = median(sens[,2])
+          pair_info[i, 5] = median(sens[,3])
+        }
+        
+        for(i in 1:nrow(pair_idx)){
+          idx = pair_idx[i,]
+          pair_info[i, 6] =  max(sens_diff[c(idx[1], idx[2])]) - 
+            pair_info[i, 5]
+          pair_info[i, 7] = - f_sens[idx[1]] - f_sens[idx[2]] +
+            pair_info[i, 3]
+        }
+        pairInfo[[clus_num]] = pair_info
+      }
+    }
+    return(list(cluster = clus, 
+                cluster.f_sens = clus_f_sens, 
+                cluster.t_sens = clus_t_sens,
+                pairInfo = pairInfo,
+                sens_diff_thres = sens_diff_thres,
+                gpi = gpi, 
+                settings = data.frame(N =N, J = J, d=d, upper = upper)))
 }
   

@@ -29,7 +29,6 @@ first_order_sens = function(gpi, d, M, Mprime){
   return(S)
 }
 
-
 total_sens = function(gpi, d, M, Mprime){
   N <- nrow(M)
   pM <- predict(gpi, M)
@@ -49,22 +48,6 @@ total_sens = function(gpi, d, M, Mprime){
   return(T_sens)
 }
 
-# true function (the X8 is useless)
-f_test = function (n, d=8)
-{
-  X <- randomLHS(n, d)
-  Ytrue <- 12*sin(pi*X[,1]*X[,2]) + 10*(X[,3] + X[,4] - X[,5] - 0.5)^2 + 10*X[,6] + 5*X[,7]
-  Y <- Ytrue + rnorm(n, 0, 1)
-  return(data.frame(X, Y, Ytrue))
-}
-
-f_test_no3 = function(n,d = 8){
-  X <- randomLHS(n, d)
-  Ytrue <- 15*sin(pi*X[,1]*X[,2]) + 20*(X[,3] + X[,4])^2 + 
-    20*(X[,3] - X[,5] - 0.5)^2 + 10*X[,6] + 5*X[,7]
-  Y <- Ytrue + rnorm(n, 0, 1)
-  return(data.frame(X, Y, Ytrue))
-}
 # # generate data
 #   data <- f_test(300)
 #   d = 8
