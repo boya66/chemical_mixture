@@ -13,35 +13,61 @@
 ##         sens: a list of all sensitivity indices for variables in each cluster
 ###############################################################################
 var_cluster_exhausted <- function(data, d, N = 3000, J= 20, seed = 123, 
-                              alpha = 0.05, saveData = F, ...){
+                              alpha = 0.05, uk = NULL, saveData = F, g_max = NULL,...){
     Y = data[, d+1]
     upper = 30
-    gpi = mleHomGP(X = as.matrix(data[,1:d]), Z = Y, lower = rep(1, d), upper = rep(upper, d),
-                covtype = 'Gaussian', maxit = 500)
-    while(gpi$msg != "CONVERGENCE: REL_REDUCTION_OF_F <= FACTR*EPSMCH"){
-      upper = upper + 1
-      gpi = mleHomGP(X = as.matrix(data[,1:d]), Z = Y, lower = rep(1, d), upper = rep(upper, d),
-                     covtype = 'Gaussian', maxit = 500)
+    if(!is.null(g_max)){
+      gpi = mleHomGP(X = as.matrix(data[,1:d]), Z = Y, lower = rep(1, d), 
+                     upper = rep(upper, d), covtype = 'Gaussian', maxit = 500,
+                     noiseControl = list(g_bounds = c(sqrt(.Machine$double.eps), g_max)))
+      while(gpi$msg != "CONVERGENCE: REL_REDUCTION_OF_F <= FACTR*EPSMCH"){
+        upper = upper + 1
+        gpi = mleHomGP(X = as.matrix(data[,1:d]), Z = Y, lower = rep(1, d), 
+                       upper = rep(upper, d), covtype = 'Gaussian', maxit = 500,
+                       noiseControl = list(g_bounds = c(sqrt(.Machine$double.eps), g_max)))
+      }
+    }else{
+      gpi = mleHomGP(X = as.matrix(data[,1:d]), Z = Y, lower = rep(1, d), 
+                     upper = rep(upper, d), covtype = 'Gaussian', maxit = 500)
+      while(gpi$msg != "CONVERGENCE: REL_REDUCTION_OF_F <= FACTR*EPSMCH"){
+        upper = upper + 1
+        gpi = mleHomGP(X = as.matrix(data[,1:d]), Z = Y, lower = rep(1, d), 
+                       upper = rep(upper, d), covtype = 'Gaussian', maxit = 500)
+      }
     }
     
-    int_thres = interaction_thres_mc(data[,1:d], sqrt(gpi$nu_hat * gpi$g), N, J,
-                                     d, seed = seed) #85s/4cores
+    
+    int_thres = interaction_thres_mc(data[,1:d], sqrt(gpi$nu_hat * gpi$g), N = 3000, 
+                                     J, d, seed = seed, uk = uk) #85s/4cores
     #upper;gpi_perm
     # image(seq(0,1,len=50), seq(0,1,len=50), matrix(y.pred$mean,ncol = 50))
     # Single variable importance ordering
     # repeat the calculation for J times and take the median as the value
-    sens = interaction_mc(N, J, d, gpi, seed = seed) #53s/4cores
+    sens = interaction_mc(N , J = J, d, gpi, seed = seed, uk = uk) #53s/4cores
     # calculate the scores as the medians
     f_sens = apply(matrix(sens[,1], nrow = d), 1, median)
     t_sens = apply(matrix(sens[,2], nrow = d), 1, median)
     sens_diff = apply(matrix(sens[,3], nrow = d), 1, median)
     
-    sens_diff_thres = quantile(int_thres, 1-alpha)
+    sens_diff_thres = min(quantile(int_thres, 1-alpha),1e-3)
   
     # sort the total sensitivity
     sens_idx = 1:d
     idx_single = sens_idx[sens_diff<=sens_diff_thres]
     idx_interaction = setdiff(sens_idx, idx_single)
+    while(length(idx_interaction) <= 1 & sens_diff_thres > 1e-8){
+      sens_diff_thres = sens_diff_thres/10
+      idx_single = sens_idx[sens_diff<=sens_diff_thres]
+      idx_interaction = setdiff(sens_idx, idx_single)
+    }
+    if(length(idx_interaction) == 1){
+      idx_interaction = sens_idx[sens_diff > 0]
+      idx_single = setdiff(sens_idx, idx_interaction)
+      if(length(idx_interaction == 1)){
+        idx_single = sens_idx
+        idx_interaction = setdiff(sens_idx, idx_single)
+      }
+    }
     clus = as.list(idx_single)
     clus_f_sens = f_sens[idx_single]
     clus_t_sens = t_sens[idx_single]
@@ -52,11 +78,12 @@ var_cluster_exhausted <- function(data, d, N = 3000, J= 20, seed = 123,
     sel_diff = sens_diff[idx_sel]
     
     d_pool = length(idx_interaction) - 1
+    
     while(d_pool > 0){
       comb = cbind(matrix(rep(idx_sel,each = d_pool),ncol = length(idx_sel)), idx_interaction[which(!(idx_interaction %in% idx_sel))]) 
       comb_f_sens <- comb_t_sens <- comb_diff <- rep(NA, d_pool)
       for(p in 1:d_pool){
-        comb_tmp = interaction_mult_mc(N, J, d, gpi, comb[p,], seed + p)
+        comb_tmp = interaction_mult_mc(N, J, d, gpi, comb[p,], seed + p, uk = uk)
         comb_f_sens[p] = median(comb_tmp[,1])
         comb_t_sens[p] = median(comb_tmp[,2])
         comb_diff[p] = median(comb_tmp[,3])
@@ -90,8 +117,8 @@ var_cluster_exhausted <- function(data, d, N = 3000, J= 20, seed = 123,
               sel_diff = sens_diff[idx_sel]
               if(d_pool == 0){
                 clus[[clus_num]] = idx_sel
-                clus_f_sens[clus_num] = comb_f_sens
-                clus_t_sens[clus_num] = comb_t_sens
+                clus_f_sens[clus_num] = f_sens[idx_sel]
+                clus_t_sens[clus_num] = t_sens[idx_sel]
               }
               
             }
@@ -110,8 +137,8 @@ var_cluster_exhausted <- function(data, d, N = 3000, J= 20, seed = 123,
         sel_diff = sens_diff[idx_sel]
         if(d_pool == 0){
           clus[[clus_num]] = idx_sel
-          clus_f_sens[clus_num] = comb_f_sens
-          clus_t_sens[clus_num] = comb_t_sens
+          clus_f_sens[clus_num] = f_sens[idx_sel]
+          clus_t_sens[clus_num] = t_sens[idx_sel]
         }
       }
     }
@@ -147,6 +174,11 @@ var_cluster_exhausted <- function(data, d, N = 3000, J= 20, seed = 123,
                 cluster.f_sens = clus_f_sens, 
                 cluster.t_sens = clus_t_sens,
                 pairInfo = pairInfo,
+                singleInfo = data.frame(
+                  f_sens = f_sens,
+                  t_sens = t_sens,
+                  I = sens_diff
+                ),
                 sens_diff_thres = sens_diff_thres,
                 gpi = gpi, 
                 settings = data.frame(N =N, J = J, d=d, upper = upper)))
