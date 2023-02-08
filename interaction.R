@@ -3,11 +3,26 @@ library(MASS)
 #numCores <- detectCores()
 #numCores
 
-interaction <- function(N, d, gpi, seed = 1){
-
+interaction <- function(N, d, gpi, seed = 1, uk = NULL){
   set.seed(seed)
   M = lhs::randomLHS(N, d)
   Mprime = lhs::randomLHS(N, d)
+  if(!is.null(uk)){
+    for(i in 1:d){
+      if(uk$dist[d] == "normal"){
+        M[,d] = qnorm(M[,d], uk$param[1], uk$param[2])
+        Mprime[,d] = qnorm(Mprime[,d], uk$param[1], uk$param[2])
+      }else if(uk$dist[d] == "lognormal"){
+        M[,d] = qlnorm(M[,d], meanlog = uk$param[1], sdlog = uk$param[2])
+        Mprime[,d] = qlnorm(Mprime[,d], meanlog = uk$param[1], sdlog = uk$param[2])
+      }else if(uk$dist[d] == "bernoulli"){
+        M[,d] = ifelse(M[,d] < uk$param, 0, 1)
+        Mprime[,d] = ifelse(Mprime[,d] < uk$param, 0, 1)
+      }else{
+        stop("Only support normal, longnormal and bernoulli")
+      }
+    }
+  }
   # fist-order sensitivity
   f_sens = first_order_sens(gpi, d, M, Mprime)
   
@@ -21,10 +36,26 @@ interaction <- function(N, d, gpi, seed = 1){
   return(cbind(f_sens, t_sens, I))
 }
 
-interaction_mult <- function(N, d, gpi, idx, seed = 1){
+interaction_mult <- function(N, d, gpi, idx, seed = 1, uk = NULL){
   set.seed(seed)
   M = lhs::randomLHS(N, d)
   Mprime = lhs::randomLHS(N, d)
+  if(!is.null(uk)){
+    for(i in 1:d){
+      if(uk$dist[d] == "normal"){
+        M[,d] = qnorm(M[,d], uk$param[1], uk$param[2])
+        Mprime[,d] = qnorm(Mprime[,d], uk$param[1], uk$param[2])
+      }else if(uk$dist[d] == "lognormal"){
+        M[,d] = qlnorm(M[,d], meanlog = uk$param[1], sdlog = uk$param[2])
+        Mprime[,d] = qlnorm(Mprime[,d], meanlog = uk$param[1], sdlog = uk$param[2])
+      }else if(uk$dist[d] == "bernoulli"){
+        M[,d] = ifelse(M[,d] < uk$param, 0, 1)
+        Mprime[,d] = ifelse(Mprime[,d] < uk$param, 0, 1)
+      }else{
+        stop("Only support normal, longnormal and bernoulli")
+      }
+    }
+  }
   # fist-order sensitivity
   f_sens = first_order_sens_mult(gpi, d, M, Mprime,idx)
   
@@ -38,34 +69,54 @@ interaction_mult <- function(N, d, gpi, idx, seed = 1){
   return(cbind(f_sens, t_sens, I))
 }
 
-interaction_thres <- function(X, sd, N, d = ncol(X), upper = 30, seed = 1){
-  # The measurement error is tau square times nugget g from Section 5.2.2 on Book "Surrogate" by Grammacy
+interaction_thres <- 
+  function(X, sd, N, d = ncol(X), upper = 30, seed = 1, uk = NULL){
+  # The measurement error is tau square times nugget g from Section 5.2.2 in the 
+  # Book "Surrogate" by Grammacy
   # All variables have no interaction and the first column is null
   n = nrow(X)
   set.seed(seed)
-  Y_noInter = rowSums(X[,2:d]) + rnorm(n,0,sd)
-  gpi_perm = mleHomGP(X = as.matrix(X[,1:d]), Z = Y_noInter, lower = rep(1, d), upper = rep(upper, d),
-                      covtype = 'Gaussian', maxit = 500)
+  Y_noInter = rowSums(X[,1:d]) + rnorm(n,0,sd)
+  gpi_perm = mleHomGP(X = as.matrix(X[,1:d]), Z = Y_noInter, lower = rep(1, d), 
+                      upper = rep(upper, d), covtype = 'Gaussian', maxit = 500)
   while(gpi_perm$msg != "CONVERGENCE: REL_REDUCTION_OF_F <= FACTR*EPSMCH"){
     upper = upper + 1
-    gpi_perm = mleHomGP(X = as.matrix(X[,1:d]), Z = Y_noInter, lower = rep(1, d), upper = rep(upper, d),
-                        covtype = 'Gaussian', maxit = 500)
+    gpi_perm = mleHomGP(X = as.matrix(X[,1:d]), Z = Y_noInter, lower = rep(1, d), 
+                        upper = rep(upper, d), covtype = 'Gaussian', maxit = 500)
   }
-  sens = interaction(N, d, gpi_perm, seed = 1)
+  sens = interaction(N, d, gpi_perm, seed = seed, uk = uk)
   return(sens[,3])
 }
 
-interaction_mc <- function(N, J, d, gpi, seed = 1){
-  interaction <- function(N, d, gpi, seed = 1){
-    
+##### ------------ Multiple-run of interaction ------------- ####
+interaction_mc <- function(N, J, d, gpi, seed = 1, uk = NULL){
+  interaction <- function(N, d, gpi, seed = 1, uk = NULL){
     set.seed(seed)
+    source("sensitivity_hetGP.R")
     M = lhs::randomLHS(N, d)
     Mprime = lhs::randomLHS(N, d)
+    if(!is.null(uk)){
+      for(i in 1:d){
+        if(uk$dist[d] == "normal"){
+          M[,d] = qnorm(M[,d], uk$param[1], uk$param[2])
+          Mprime[,d] = qnorm(Mprime[,d], uk$param[1], uk$param[2])
+        }else if(uk$dist[d] == "lognormal"){
+          M[,d] = qlnorm(M[,d], meanlog = uk$param[1], sdlog = uk$param[2])
+          Mprime[,d] = qlnorm(Mprime[,d], meanlog = uk$param[1], sdlog = uk$param[2])
+        }else if(uk$dist[d] == "bernoulli"){
+          M[,d] = ifelse(M[,d] < uk$param, 0, 1)
+          Mprime[,d] = ifelse(Mprime[,d] < uk$param, 0, 1)
+        }else{
+          stop("Only support normal, longnormal and bernoulli")
+        }
+      }
+    }
     # fist-order sensitivity
     f_sens = first_order_sens(gpi, d, M, Mprime)
     
     # total sensitivity
     t_sens = total_sens(gpi, d, M, Mprime)
+    
     
     # difference between first-order and total sensitivity scores
     I = t_sens - f_sens
@@ -75,16 +126,33 @@ interaction_mc <- function(N, J, d, gpi, seed = 1){
   }
   
   sens = foreach::foreach(i = 1:J, .combine = "rbind", .packages = "hetGP") %dopar% {
-    interaction(N, d, gpi, seed + i)
+    interaction(N, d, gpi, seed + i, uk = uk)
   }
   return(sens)
 }
 
-interaction_mult_mc <- function(N,J,d,gpi,idx,seed = 1){
-  interaction_mult <- function(N, d, gpi, idx, seed = 1){
+interaction_mult_mc <- function(N,J,d,gpi,idx,seed = 1,uk =NULL){
+  interaction_mult <- function(N, d, gpi, idx, seed = 1, uk =NULL){
     set.seed(seed)
+    source("sensitivity_hetGP.R")
     M = lhs::randomLHS(N, d)
     Mprime = lhs::randomLHS(N, d)
+    if(!is.null(uk)){
+      for(i in 1:d){
+        if(uk$dist[d] == "normal"){
+          M[,d] = qnorm(M[,d], uk$param[1], uk$param[2])
+          Mprime[,d] = qnorm(Mprime[,d], uk$param[1], uk$param[2])
+        }else if(uk$dist[d] == "lognormal"){
+          M[,d] = qlnorm(M[,d], meanlog = uk$param[1], sdlog = uk$param[2])
+          Mprime[,d] = qlnorm(Mprime[,d], meanlog = uk$param[1], sdlog = uk$param[2])
+        }else if(uk$dist[d] == "bernoulli"){
+          M[,d] = ifelse(M[,d] < uk$param, 0, 1)
+          Mprime[,d] = ifelse(Mprime[,d] < uk$param, 0, 1)
+        }else{
+          stop("Only support normal, longnormal and bernoulli")
+        }
+      }
+    }
     # fist-order sensitivity
     f_sens = first_order_sens_mult(gpi, d, M, Mprime,idx)
     
@@ -98,9 +166,32 @@ interaction_mult_mc <- function(N,J,d,gpi,idx,seed = 1){
     return(cbind(f_sens, t_sens, I))
   }
   sens = foreach::foreach(i = 1:J, .combine = "rbind", .packages = "hetGP") %dopar% {
-    interaction_mult(N, d, gpi, idx, seed + i)
+    interaction_mult(N, d, gpi, idx, seed + i,uk = uk)
   }
   return(sens)
   
 }
 
+##### ------------ Multiple-run of interaction (single-thread version) ------------- ####
+interaction_mc_single <- function(N, J, d, gpi, seed = 1, uk = NULL){
+  f_sens <- t_sens <- I <- rep(NA, J*d)
+  for(j in 1:J){
+    sens = interaction(N, d, gpi, seed + j, uk = uk)
+    f_sens[(j-1)*d + (1:d)] <- sens[,1]
+    t_sens[(j-1)*d + (1:d)] <- sens[,2]
+    I[(j-1)*d + (1:d)] <- sens[,3]
+  }
+  return(cbind(f_sens,t_sens,I))
+}
+
+interaction_mult_mc_single <- function(N,J,d,gpi,idx,seed = 1, uk = NULL){
+  f_sens <- t_sens <- I <- rep(NA, J)
+  for(j in 1:J){
+    sens = interaction_mult(N, d, gpi, idx, seed + j, uk = uk)
+    f_sens[j] <- sens[1]
+    t_sens[j] <- sens[2]
+    I[j] <- sens[3]
+  }
+  return(cbind(f_sens,t_sens,I))
+  
+}
