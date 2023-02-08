@@ -10,14 +10,14 @@ interaction <- function(N, d, gpi, seed = 1, uk = NULL){
   if(!is.null(uk)){
     for(i in 1:d){
       if(uk$dist[d] == "normal"){
-        M[,d] = qnorm(M[,d], uk$param[1], uk$param[2])
-        Mprime[,d] = qnorm(Mprime[,d], uk$param[1], uk$param[2])
+        M[,d] = qnorm(M[,d], uk$param[d,1], uk$param[d,2])
+        Mprime[,d] = qnorm(Mprime[,d], uk$param[d,1], uk$param[d,2])
       }else if(uk$dist[d] == "lognormal"){
-        M[,d] = qlnorm(M[,d], meanlog = uk$param[1], sdlog = uk$param[2])
-        Mprime[,d] = qlnorm(Mprime[,d], meanlog = uk$param[1], sdlog = uk$param[2])
+        M[,d] = qlnorm(M[,d], meanlog = uk$param[d,1], sdlog = uk$param[d,2])
+        Mprime[,d] = qlnorm(Mprime[,d], meanlog = uk$param[d,1], sdlog = uk$param[d,2])
       }else if(uk$dist[d] == "bernoulli"){
-        M[,d] = ifelse(M[,d] < uk$param, 0, 1)
-        Mprime[,d] = ifelse(Mprime[,d] < uk$param, 0, 1)
+        M[,d] = ifelse(M[,d] < uk$param[d,1], 0, 1)
+        Mprime[,d] = ifelse(Mprime[,d] < uk$param[d,1], 0, 1)
       }else{
         stop("Only support normal, longnormal and bernoulli")
       }
@@ -43,14 +43,14 @@ interaction_mult <- function(N, d, gpi, idx, seed = 1, uk = NULL){
   if(!is.null(uk)){
     for(i in 1:d){
       if(uk$dist[d] == "normal"){
-        M[,d] = qnorm(M[,d], uk$param[1], uk$param[2])
-        Mprime[,d] = qnorm(Mprime[,d], uk$param[1], uk$param[2])
+        M[,d] = qnorm(M[,d], uk$param[d,1], uk$param[d,2])
+        Mprime[,d] = qnorm(Mprime[,d], uk$param[d,1], uk$param[d,2])
       }else if(uk$dist[d] == "lognormal"){
-        M[,d] = qlnorm(M[,d], meanlog = uk$param[1], sdlog = uk$param[2])
-        Mprime[,d] = qlnorm(Mprime[,d], meanlog = uk$param[1], sdlog = uk$param[2])
+        M[,d] = qlnorm(M[,d], meanlog = uk$param[d,1], sdlog = uk$param[d,2])
+        Mprime[,d] = qlnorm(Mprime[,d], meanlog = uk$param[d,1], sdlog = uk$param[d,2])
       }else if(uk$dist[d] == "bernoulli"){
-        M[,d] = ifelse(M[,d] < uk$param, 0, 1)
-        Mprime[,d] = ifelse(Mprime[,d] < uk$param, 0, 1)
+        M[,d] = ifelse(M[,d] < uk$param[d,1], 0, 1)
+        Mprime[,d] = ifelse(Mprime[,d] < uk$param[d,1], 0, 1)
       }else{
         stop("Only support normal, longnormal and bernoulli")
       }
@@ -98,14 +98,14 @@ interaction_mc <- function(N, J, d, gpi, seed = 1, uk = NULL){
     if(!is.null(uk)){
       for(i in 1:d){
         if(uk$dist[d] == "normal"){
-          M[,d] = qnorm(M[,d], uk$param[1], uk$param[2])
-          Mprime[,d] = qnorm(Mprime[,d], uk$param[1], uk$param[2])
+          M[,d] = qnorm(M[,d], uk$param[d,1], uk$param[d,2])
+          Mprime[,d] = qnorm(Mprime[,d], uk$param[d,1], uk$param[d,2])
         }else if(uk$dist[d] == "lognormal"){
-          M[,d] = qlnorm(M[,d], meanlog = uk$param[1], sdlog = uk$param[2])
-          Mprime[,d] = qlnorm(Mprime[,d], meanlog = uk$param[1], sdlog = uk$param[2])
+          M[,d] = qlnorm(M[,d], meanlog = uk$param[d,1], sdlog = uk$param[d,2])
+          Mprime[,d] = qlnorm(Mprime[,d], meanlog = uk$param[d,1], sdlog = uk$param[d,2])
         }else if(uk$dist[d] == "bernoulli"){
-          M[,d] = ifelse(M[,d] < uk$param, 0, 1)
-          Mprime[,d] = ifelse(Mprime[,d] < uk$param, 0, 1)
+          M[,d] = ifelse(M[,d] < uk$param[d,1], 0, 1)
+          Mprime[,d] = ifelse(Mprime[,d] < uk$param[d,1], 0, 1)
         }else{
           stop("Only support normal, longnormal and bernoulli")
         }
@@ -140,14 +140,14 @@ interaction_mult_mc <- function(N,J,d,gpi,idx,seed = 1,uk =NULL){
     if(!is.null(uk)){
       for(i in 1:d){
         if(uk$dist[d] == "normal"){
-          M[,d] = qnorm(M[,d], uk$param[1], uk$param[2])
-          Mprime[,d] = qnorm(Mprime[,d], uk$param[1], uk$param[2])
+          M[,d] = qnorm(M[,d], uk$param[d,1], uk$param[d,2])
+          Mprime[,d] = qnorm(Mprime[,d], uk$param[d,1], uk$param[d,2])
         }else if(uk$dist[d] == "lognormal"){
-          M[,d] = qlnorm(M[,d], meanlog = uk$param[1], sdlog = uk$param[2])
-          Mprime[,d] = qlnorm(Mprime[,d], meanlog = uk$param[1], sdlog = uk$param[2])
+          M[,d] = qlnorm(M[,d], meanlog = uk$param[d,1], sdlog = uk$param[d,2])
+          Mprime[,d] = qlnorm(Mprime[,d], meanlog = uk$param[d,1], sdlog = uk$param[d,2])
         }else if(uk$dist[d] == "bernoulli"){
-          M[,d] = ifelse(M[,d] < uk$param, 0, 1)
-          Mprime[,d] = ifelse(Mprime[,d] < uk$param, 0, 1)
+          M[,d] = ifelse(M[,d] < uk$param[d,1], 0, 1)
+          Mprime[,d] = ifelse(Mprime[,d] < uk$param[d,1], 0, 1)
         }else{
           stop("Only support normal, longnormal and bernoulli")
         }
