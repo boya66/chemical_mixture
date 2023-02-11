@@ -153,7 +153,7 @@ interaction_mc <- function(N, J, d, gpi, seed = 1, uk = NULL, p = 0,
   }
   
   sens = foreach::foreach(i = 1:J, .combine = "rbind", .packages = "hetGP") %dopar% {
-    interaction(N, d, gpi, seed + i, uk = uk, p = p, fixed_val = NULL)
+    interaction(N, d, gpi, seed + i, uk = uk, p = p, fixed_val = fixed_val)
   }
   return(sens)
 }
