@@ -13,26 +13,28 @@
 ##         sens: a list of all sensitivity indices for variables in each cluster
 ###############################################################################
 var_cluster_exhausted <- function(data, d, N = 3000, J= 20, seed = 123, 
-                              alpha = 0.05, uk = NULL, saveData = F, g_max = NULL,...){
+                              alpha = 0.05, uk = NULL, g_max = NULL,...){
     Y = data[, d+1]
+    p = ncol(data) - d - 1
+    fixed_val = apply(data[,(d+2):ncol(data)],2,median)
     upper = 30
     if(!is.null(g_max)){
-      gpi = mleHomGP(X = as.matrix(data[,1:d]), Z = Y, lower = rep(1, d), 
-                     upper = rep(upper, d), covtype = 'Gaussian', maxit = 500,
+      gpi = mleHomGP(X = as.matrix(data[,-(d+1)]), Z = Y, lower = rep(1, d+p), 
+                     upper = rep(upper, d+p), covtype = 'Gaussian', maxit = 500,
                      noiseControl = list(g_bounds = c(sqrt(.Machine$double.eps), g_max)))
       while(gpi$msg != "CONVERGENCE: REL_REDUCTION_OF_F <= FACTR*EPSMCH"){
         upper = upper + 1
-        gpi = mleHomGP(X = as.matrix(data[,1:d]), Z = Y, lower = rep(1, d), 
-                       upper = rep(upper, d), covtype = 'Gaussian', maxit = 500,
+        gpi = mleHomGP(X = as.matrix(data[,-(d+1)]), Z = Y, lower = rep(1, d+1), 
+                       upper = rep(upper, d+1), covtype = 'Gaussian', maxit = 500,
                        noiseControl = list(g_bounds = c(sqrt(.Machine$double.eps), g_max)))
       }
     }else{
-      gpi = mleHomGP(X = as.matrix(data[,1:d]), Z = Y, lower = rep(1, d), 
-                     upper = rep(upper, d), covtype = 'Gaussian', maxit = 500)
+      gpi = mleHomGP(X = as.matrix(data[,-(d+1)]), Z = Y, lower = rep(1, d+1), 
+                     upper = rep(upper, d+1), covtype = 'Gaussian', maxit = 500)
       while(gpi$msg != "CONVERGENCE: REL_REDUCTION_OF_F <= FACTR*EPSMCH"){
         upper = upper + 1
-        gpi = mleHomGP(X = as.matrix(data[,1:d]), Z = Y, lower = rep(1, d), 
-                       upper = rep(upper, d), covtype = 'Gaussian', maxit = 500)
+        gpi = mleHomGP(X = as.matrix(data[,-(d+1)]), Z = Y, lower = rep(1, d+1), 
+                       upper = rep(upper, d+1), covtype = 'Gaussian', maxit = 500)
       }
     }
     
@@ -43,7 +45,8 @@ var_cluster_exhausted <- function(data, d, N = 3000, J= 20, seed = 123,
     # image(seq(0,1,len=50), seq(0,1,len=50), matrix(y.pred$mean,ncol = 50))
     # Single variable importance ordering
     # repeat the calculation for J times and take the median as the value
-    sens = interaction_mc(N , J = J, d, gpi, seed = seed, uk = uk) #53s/4cores
+    sens = interaction_mc(N , J = J, d, gpi, seed = seed, uk = uk, 
+                          p = p, fixed_val = fixed_val) #53s/4cores
     # calculate the scores as the medians
     f_sens = apply(matrix(sens[,1], nrow = d), 1, median)
     t_sens = apply(matrix(sens[,2], nrow = d), 1, median)
@@ -80,13 +83,15 @@ var_cluster_exhausted <- function(data, d, N = 3000, J= 20, seed = 123,
     d_pool = length(idx_interaction) - 1
     
     while(d_pool > 0){
-      comb = cbind(matrix(rep(idx_sel,each = d_pool),ncol = length(idx_sel)), idx_interaction[which(!(idx_interaction %in% idx_sel))]) 
+      comb = cbind(matrix(rep(idx_sel,each = d_pool),ncol = length(idx_sel)), 
+                   idx_interaction[which(!(idx_interaction %in% idx_sel))]) 
       comb_f_sens <- comb_t_sens <- comb_diff <- rep(NA, d_pool)
-      for(p in 1:d_pool){
-        comb_tmp = interaction_mult_mc(N, J, d, gpi, comb[p,], seed + p, uk = uk)
-        comb_f_sens[p] = median(comb_tmp[,1])
-        comb_t_sens[p] = median(comb_tmp[,2])
-        comb_diff[p] = median(comb_tmp[,3])
+      for(j in 1:d_pool){
+        comb_tmp = interaction_mult_mc(N, J, d, gpi, comb[j,], seed + j, uk = uk,
+                                       p = p, fixed_val = fixed_val)
+        comb_f_sens[j] = median(comb_tmp[,1])
+        comb_t_sens[j] = median(comb_tmp[,2])
+        comb_diff[j] = median(comb_tmp[,3])
       }
       
       sel_new = comb[which.min(comb_diff),ncol(comb)]
@@ -154,7 +159,8 @@ var_cluster_exhausted <- function(data, d, N = 3000, J= 20, seed = 123,
         for(i in 1: nrow(pair_idx)){
           idx = pair_idx[i,]
           #interaction_mult(N,d,gpi,idx,seed = seed)
-          sens = interaction_mult_mc(N,J,d,gpi,idx,seed = seed)
+          sens = interaction_mult_mc(N,J,d,gpi,idx,seed = seed, uk = uk,
+                                     p = p, fixed_val = fixed_val)
           pair_info[i, 3] = median(sens[,1])
           pair_info[i, 4] = median(sens[,2])
           pair_info[i, 5] = median(sens[,3])
