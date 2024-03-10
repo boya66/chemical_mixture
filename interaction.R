@@ -3,7 +3,7 @@ library(MASS)
 #numCores <- detectCores()
 #numCores
 
-interaction <- function(N, d, gpi, seed = 1, uk = NULL, p = 0, fixed_val = NULL){
+interaction <- function(N, d, gpi, seed = 1, uk = NULL){
   set.seed(seed)
   M = lhs::randomLHS(N, d)
   Mprime = lhs::randomLHS(N, d)
@@ -27,12 +27,7 @@ interaction <- function(N, d, gpi, seed = 1, uk = NULL, p = 0, fixed_val = NULL)
   }
   # If the number of covariates p is larger than 0, set the last p columns to a 
   # fixed value so that they will not join the computation of sensitivity indices.
-  if(p > 0){
-    for(i in 1:p){
-      M = cbind(M,rep(fixed_val[i],N))
-      Mprime = cbind(Mprime,rep(fixed_val[i],N))
-    }
-  }
+  
   # fist-order sensitivity
   f_sens = first_order_sens(gpi, d, M, Mprime)
   
@@ -46,8 +41,7 @@ interaction <- function(N, d, gpi, seed = 1, uk = NULL, p = 0, fixed_val = NULL)
   return(cbind(f_sens, t_sens, I))
 }
 
-interaction_mult <- function(N, d, gpi, idx, seed = 1, uk = NULL, p = 0, 
-                             fixed_val = NULL){
+interaction_mult <- function(N, d, gpi, idx, seed = 1, uk = NULL){
   set.seed(seed)
   M = lhs::randomLHS(N, d)
   Mprime = lhs::randomLHS(N, d)
@@ -67,12 +61,7 @@ interaction_mult <- function(N, d, gpi, idx, seed = 1, uk = NULL, p = 0,
       }
     }
   }
-  if(p > 0){
-    for(i in 1:p){
-      M = cbind(M,rep(fixed_val[i],N))
-      Mprime = cbind(Mprime,rep(fixed_val[i],N))
-    }
-  }
+
   # fist-order sensitivity
   f_sens = first_order_sens_mult(gpi, d, M, Mprime,idx)
   
@@ -106,10 +95,8 @@ interaction_thres <-
 }
 
 ##### ------------ Multiple-run of interaction ------------- ####
-interaction_mc <- function(N, J, d, gpi, seed = 1, uk = NULL, p = 0,
-                           fixed_val = NULL){
-  interaction <- function(N, d, gpi, seed = 1, uk = NULL, p = 0,
-                          fixed_val = NULL){
+interaction_mc <- function(N, J, d, gpi, seed = 1, uk = NULL){
+  interaction <- function(N, d, gpi, seed = 1, uk = NULL){
     set.seed(seed)
     source("sensitivity_hetGP.R")
     M = lhs::randomLHS(N, d)
@@ -131,12 +118,6 @@ interaction_mc <- function(N, J, d, gpi, seed = 1, uk = NULL, p = 0,
       }
     }
     
-    if(p > 0){
-      for(i in 1:p){
-        M = cbind(M,rep(fixed_val[i],N))
-        Mprime = cbind(Mprime,rep(fixed_val[i],N))
-      }
-    }
     
     # fist-order sensitivity
     f_sens = first_order_sens(gpi, d, M, Mprime)
@@ -153,15 +134,13 @@ interaction_mc <- function(N, J, d, gpi, seed = 1, uk = NULL, p = 0,
   }
   
   sens = foreach::foreach(i = 1:J, .combine = "rbind", .packages = "hetGP") %dopar% {
-    interaction(N, d, gpi, seed + i, uk = uk, p = p, fixed_val = fixed_val)
+    interaction(N, d, gpi, seed + i, uk = uk)
   }
   return(sens)
 }
 
-interaction_mult_mc <- function(N,J,d,gpi,idx,seed = 1,uk =NULL, p = 0, 
-                                fixed_val = NULL){
-  interaction_mult <- function(N, d, gpi, idx, seed = 1, uk =NULL, p = 0,
-                               fixed_val = NULL){
+interaction_mult_mc <- function(N,J,d,gpi,idx,seed = 1,uk =NULL){
+  interaction_mult <- function(N, d, gpi, idx, seed = 1, uk =NULL){
     set.seed(seed)
     source("sensitivity_hetGP.R")
     M = lhs::randomLHS(N, d)
@@ -183,12 +162,6 @@ interaction_mult_mc <- function(N,J,d,gpi,idx,seed = 1,uk =NULL, p = 0,
       }
     }
     
-    if(p > 0){
-      for(i in 1:p){
-        M = cbind(M,rep(fixed_val[i],N))
-        Mprime = cbind(Mprime,rep(fixed_val[i],N))
-      }
-    }
     
     # fist-order sensitivity
     f_sens = first_order_sens_mult(gpi, d, M, Mprime,idx)
@@ -203,18 +176,17 @@ interaction_mult_mc <- function(N,J,d,gpi,idx,seed = 1,uk =NULL, p = 0,
     return(cbind(f_sens, t_sens, I))
   }
   sens = foreach::foreach(i = 1:J, .combine = "rbind", .packages = "hetGP") %dopar% {
-    interaction_mult(N, d, gpi, idx, seed + i,uk = uk, p = p, fixed_val = fixed_val)
+    interaction_mult(N, d, gpi, idx, seed + i,uk = uk)
   }
   return(sens)
   
 }
 
 ##### ------------ Multiple-run of interaction (single-thread version) ------------- ####
-interaction_mc_single <- function(N, J, d, gpi, seed = 1, uk = NULL, p = 0,
-                                  fixed_val = NULL){
+interaction_mc_single <- function(N, J, d, gpi, seed = 1, uk = NULL){
   f_sens <- t_sens <- I <- rep(NA, J*d)
   for(j in 1:J){
-    sens = interaction(N, d, gpi, seed + j, uk = uk, p = p, fixed_val = fixed_val)
+    sens = interaction(N, d, gpi, seed + j, uk = uk)
     f_sens[(j-1)*d + (1:d)] <- sens[,1]
     t_sens[(j-1)*d + (1:d)] <- sens[,2]
     I[(j-1)*d + (1:d)] <- sens[,3]
@@ -222,12 +194,10 @@ interaction_mc_single <- function(N, J, d, gpi, seed = 1, uk = NULL, p = 0,
   return(cbind(f_sens,t_sens,I))
 }
 
-interaction_mult_mc_single <- function(N,J,d,gpi,idx,seed = 1, uk = NULL, p = 0,
-                                       fixed_val = NULL){
+interaction_mult_mc_single <- function(N,J,d,gpi,idx,seed = 1, uk = NULL){
   f_sens <- t_sens <- I <- rep(NA, J)
   for(j in 1:J){
-    sens = interaction_mult(N, d, gpi, idx, seed + j, uk = uk, p = p, 
-                            fixed_val = fixed_val)
+    sens = interaction_mult(N, d, gpi, idx, seed + j, uk = uk)
     f_sens[j] <- sens[1]
     t_sens[j] <- sens[2]
     I[j] <- sens[3]

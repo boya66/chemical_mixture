@@ -1,11 +1,16 @@
-get_pairIdx <- function(x){
+get_pairIdx <- function(x,...){
   n = length(x)
-  N = n * (n-1)/2
-  idx1 = rep(x[-n], (n-1):1)
-  idx2 = x[-1]
-  if(n > 2){
-    for(i in 2:(n-1)){
-      idx2 = c(idx2, x[-(1:i)])
+  if(n == 1){
+    idx1 = rep(x,d-1)
+    idx2 = setdiff(1:d,x)
+  }else{
+    N = n * (n-1)/2
+    idx1 = rep(x[-n], (n-1):1)
+    idx2 = x[-1]
+    if(n > 2){
+      for(i in 2:(n-1)){
+        idx2 = c(idx2, x[-(1:i)])
+      }
     }
   }
   return(cbind(idx1, idx2))
@@ -93,7 +98,7 @@ get_ARI <- function(A,B){
   return(ARI)
 }
 
-## Integration, the percentage of data points from given cluster of true partion
+## Integration, the percentage of data points from given cluster of true partition
 # that are in the same cluster in partition B.
 ## Inputs: A: the list of true partitioning
 ##         B: the list of partitioning
